@@ -33,13 +33,21 @@ async function run() {
     // Send parcel Crud Operation
     app.get("/parcels",async(req,res)=>{
         const query={};
-        res.send("Kuttamara")
+        const {email}=req.query
+        if(email)
+        {
+          query.senderMail=email
+        }
+
+        const cursor=parcelCollection.find(query)
+        const result = await cursor.toArray();
+        res.send(result)
     })
 
     app.post('/parcels',async(req,res)=>{
         const parcel=req.body;
         const result=await parcelCollection.insertOne(parcel);
-        return res;
+        return res.send(result);
     })
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
