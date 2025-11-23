@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const port=process.env.PORT || 3000;
 
-
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 // MiddleWare use 
 
 app.use(express.json());
@@ -69,12 +69,71 @@ app.get("/parcels/:id",async(req,res)=>{
       const result = await parcelCollection.deleteOne(query);
       res.send(result)
     })
+
+      // payment related api
+  app.post('/create-checkout-session', async (req, res) => {
+    const paymentInfo=req.body;
+
+    const amount =parseInt(paymentInfo.cost)*100;
+    const session = await stripe.checkout.sessions.create({
+    line_items: [
+      {
+        
+        price_data:{
+          currency:'USD',
+          product_data:{
+            name:paymentInfo.parcelName
+          },
+          unit_amount:amount,
+        },
+        quantity: 1,
+      },
+    ],
+    customer_email:paymentInfo.senderEmail,
+    mode: 'payment',
+    metadata:{
+      parcelID:paymentInfo.parcelId
+    },
+    success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+
+  });
+
+
+  res.send(session.url);
+});
+
+  app.patch("/payment-success",async(req,res)=>{
+    const sessionId=req.query.sessionId;
+    
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if(session.payment_status==="paid")
+      {
+        // console.log(session.metadata.parcelID)
+        const query={_id:new ObjectId(session.metadata.parcelID)};
+
+        const update={
+          $set:{
+            paymentStatus:"paid"
+          }
+        }
+        const option={};
+        const result = await parcelCollection.updateOne(query,update,option)
+        res.send(result);
+      }
+  
+    
+    res.send({success:false});
+  })
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
    
   }
+
+
 }
 run().catch(console.dir);
 // listener
