@@ -23,13 +23,21 @@ const client = new MongoClient(uri, {
 
 
 // connect mondoDb 
+function generateTrackingId() {
+  const prefix = "TRK"; 
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  return `${prefix}-${date}-${random}`;
+}
+
 async function run() {
   try {
     
     await client.connect();
     const db=client.db("Zap_Shift_DB");
     const parcelCollection=db.collection("parcels");
-
+    const paymentCollection=db.collection("payments");
     // Send parcel Crud Operation
     app.get("/parcels",async(req,res)=>{
         const query={};
@@ -92,7 +100,8 @@ app.get("/parcels/:id",async(req,res)=>{
     customer_email:paymentInfo.senderEmail,
     mode: 'payment',
     metadata:{
-      parcelID:paymentInfo.parcelId
+      parcelID:paymentInfo.parcelId,
+      parcelName:paymentInfo.parcelName
     },
     success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
@@ -108,19 +117,49 @@ app.get("/parcels/:id",async(req,res)=>{
     
 
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log(session)
       if(session.payment_status==="paid")
       {
         // console.log(session.metadata.parcelID)
         const query={_id:new ObjectId(session.metadata.parcelID)};
+        const trackingId=generateTrackingId();
+        const transactionId=session.payment_intent;
+        const queryPayment={
+          transactionId:transactionId
+        }
 
+        const paymentExists = await paymentCollection.findOne(queryPayment)
+        if(paymentExists)
+        {
+          return res.send({message:"Already paid transaction id is ",transactionId})
+        }
         const update={
           $set:{
-            paymentStatus:"paid"
+            paymentStatus:"paid",
+            trackingId:trackingId,
           }
         }
         const option={};
         const result = await parcelCollection.updateOne(query,update,option)
-        res.send(result);
+
+        const payment={
+          amount:session.amount_total/100,
+          currency:session.currency,
+          customer_email:session.customer_email,
+          parcelId:session.metadata.parcelID,
+          parcelName:session.metadata.parcelName,
+          paymentStatus:session.payment_status,
+          transactionId:session. payment_intent,
+          paidAt:new Date()
+        }
+
+        
+        if(session.payment_status==="paid")
+        {
+
+          const paymentResult=await paymentCollection.insertOne(payment);
+          res.send({success:true,modifyParcel:result,paymentInfor:paymentResult})
+        }
       }
   
     
