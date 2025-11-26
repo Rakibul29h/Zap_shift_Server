@@ -1,4 +1,4 @@
 node_modules
 .vscode
 .env
-zap-shift-firebase-admin-sdk.json
+firebase-admin-sdk.json
