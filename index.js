@@ -61,7 +61,7 @@ async function run() {
     const parcelCollection = db.collection("parcels");
     const paymentCollection = db.collection("payments");
     const userCollection = db.collection("Users");
-    const riderCollection = db.collection("Riders");
+    const ridersCollection = db.collection("Riders");
     // User related Apis
     app.post("/users", async (req, res) => {
       const user = req.body;
